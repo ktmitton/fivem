@@ -408,7 +408,7 @@ namespace CitizenFX.Core
 				foreach (var method in GetMethods(typeof(EventHandlerAttribute)))
 				{
 					var parameters = method.GetParameters().Select(p => p.ParameterType).ToArray();
-					var actionType = Expression.GetDelegateType(parameters.Concat(new[] { typeof(void) }).ToArray());
+					var actionType = Expression.GetDelegateType(parameters.Concat(new[] { method.ReturnType }).ToArray());
 					var attribute = method.GetCustomAttribute<EventHandlerAttribute>();
 
 #if !IS_FXSERVER
