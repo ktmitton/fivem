@@ -409,16 +409,19 @@ namespace CitizenFX.Core
 				{
 					var parameters = method.GetParameters().Select(p => p.ParameterType).ToArray();
 					var actionType = Expression.GetDelegateType(parameters.Concat(new[] { typeof(void) }).ToArray());
-					var attribute = method.GetCustomAttribute<EventHandlerAttribute>();
+					var attributes = method.GetCustomAttributes<EventHandlerAttribute>();
 
 #if !IS_FXSERVER
 					Debug.WriteLine("Registering EventHandler {2} for attributed method {0}, with parameters {1}", method.Name, string.Join(", ", parameters.Select(p => p.GetType().ToString())), attribute.Name);
 #endif
 
-					if (method.IsStatic)
-						this.RegisterEventHandler(attribute.Name, Delegate.CreateDelegate(actionType, method));
-					else
-						this.RegisterEventHandler(attribute.Name, Delegate.CreateDelegate(actionType, this, method.Name));
+					for (var attribute in attributes)
+					{
+						if (method.IsStatic)
+							this.RegisterEventHandler(attribute.Name, Delegate.CreateDelegate(actionType, method));
+						else
+							this.RegisterEventHandler(attribute.Name, Delegate.CreateDelegate(actionType, this, method.Name));
+					}
 				}
 			}
 			catch (Exception e)
