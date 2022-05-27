@@ -290,7 +290,7 @@ namespace CitizenFX.Core
 		private static void TriggerLatentServerEventInternal(string eventName, byte[] argsSerialized, int bytesPerSecond)
 		{
 			var nativeHash = Hash.TRIGGER_LATENT_SERVER_EVENT_INTERNAL;
-				
+
 			unsafe
 			{
 				fixed (byte* serialized = &argsSerialized[0])
@@ -431,92 +431,39 @@ namespace CitizenFX.Core
 			{
 				foreach (var method in GetMethods(typeof(CommandAttribute)))
 				{
-					var attribute = method.GetCustomAttribute<CommandAttribute>();
+					var attributes = method.GetCustomAttributes<CommandAttribute>();
 					var parameters = method.GetParameters();
 
 #if !IS_FXSERVER
-					Debug.WriteLine("Registering command {0}", attribute.Command);
+					Debug.WriteLine("Registering commands {0}", string.Join(attributes.Select(x => x.Command)));
 #endif
+					var obj = method.IsStatic ? null : this;
+
+					var callback = default(Action<int, List<object>, string>);
 
 					// no params, trigger only
 					if (parameters.Length == 0)
 					{
-						if (method.IsStatic)
-						{
-							Native.API.RegisterCommand(attribute.Command, new Action<int, List<object>, string>((source, args, rawCommand) =>
-							{
-								method.Invoke(null, null);
-							}), attribute.Restricted);
-						}
-						else
-						{
-							Native.API.RegisterCommand(attribute.Command, new Action<int, List<object>, string>((source, args, rawCommand) =>
-							{
-								method.Invoke(this, null);
-							}), attribute.Restricted);
-						}
+						callback = new Action<int, List<object>, string>((source, args, rawCommand) => method.Invoke(obj, null));
 					}
-					// Player
-#if !IS_RDR3 && !GTA_NY
-					else if (parameters.Any(p => p.ParameterType == typeof(Player)) && parameters.Length == 1)
-					{
-#if IS_FXSERVER
-						if (method.IsStatic)
-						{
-							Native.API.RegisterCommand(attribute.Command, new Action<int, List<object>, string>((source, args, rawCommand) =>
-							{
-								method.Invoke(null, new object[] { new Player(source.ToString()) });
-							}), attribute.Restricted);
-						}
-						else
-						{
-							Native.API.RegisterCommand(attribute.Command, new Action<int, List<object>, string>((source, args, rawCommand) =>
-							{
-								method.Invoke(this, new object[] { new Player(source.ToString()) });
-							}), attribute.Restricted);
-						}
-#else
-						Debug.WriteLine("Client commands with parameter type Player not supported");
-#endif
-					}
-#endif
+
+#if IS_RDR3 || GTA_NY
 					// string[]
 					else if (parameters.Length == 1)
 					{
-						if (method.IsStatic)
-						{
-							Native.API.RegisterCommand(attribute.Command, new Action<int, List<object>, string>((source, args, rawCommand) =>
-							{
-								method.Invoke(null, new object[] { args.Select(a => (string)a).ToArray() });
-							}), attribute.Restricted);
-						}
-						else
-						{
-							Native.API.RegisterCommand(attribute.Command, new Action<int, List<object>, string>((source, args, rawCommand) =>
-							{
-								method.Invoke(this, new object[] { args.Select(a => (string)a).ToArray() });
-							}), attribute.Restricted);
-						}
+						callback = new Action<int, List<object>, string>((source, args, rawCommand) => method.Invoke(obj, new object[] { args.Select(x => (string)x).ToArray() }));
 					}
-					// Player, string[]
-#if !IS_RDR3 && !GTA_NY
-					else if (parameters.Any(p => p.ParameterType == typeof(Player)) && parameters.Length == 2)
+#else
+					// Player, string[] OR Player
+					else if (parameters[0].ParameterType is Player)
 					{
 #if IS_FXSERVER
-						if (method.IsStatic)
+						callback = new Action<int, List<object>, string>((source, args, rawCommand) =>
 						{
-							Native.API.RegisterCommand(attribute.Command, new Action<int, List<object>, string>((source, args, rawCommand) =>
-							{
-								method.Invoke(null, new object[] { new Player(source.ToString()), args.Select(a => (string)a).ToArray() });
-							}), attribute.Restricted);
-						}
-						else
-						{
-							Native.API.RegisterCommand(attribute.Command, new Action<int, List<object>, string>((source, args, rawCommand) =>
-							{
-								method.Invoke(this, new object[] { new Player(source.ToString()), args.Select(a => (string)a).ToArray() });
-							}), attribute.Restricted);
-						}
+							var params = parameters.Length == 1 ? new object[] { new Player(source.ToString()) } : new object[] { new Player(source.ToString()), args.Skip(1).Select(x => (string)x).ToArray() };
+
+							method.Invoke(obj, params);
+						});
 #else
 						Debug.WriteLine("Client commands with parameter type Player not supported");
 #endif
@@ -525,20 +472,12 @@ namespace CitizenFX.Core
 					// legacy --> int, List<object>, string
 					else
 					{
-						if (method.IsStatic)
-						{
-							Native.API.RegisterCommand(attribute.Command, new Action<int, List<object>, string>((source, args, rawCommand) =>
-							{
-								method.Invoke(null, new object[] { source, args, rawCommand });
-							}), attribute.Restricted);
-						}
-						else
-						{
-							Native.API.RegisterCommand(attribute.Command, new Action<int, List<object>, string>((source, args, rawCommand) =>
-							{
-								method.Invoke(this, new object[] { source, args, rawCommand });
-							}), attribute.Restricted);
-						}
+						callback = new Action<int, List<object>, string>((source, args, rawCommand) => method.Invoke(obj, new object[] { source, args, rawCommand }));
+					}
+
+					foreach (var attribute in attributes)
+					{
+						Native.API.RegisterCommand(attribute.Command, callback, attribute.Restricted);
 					}
 				}
 			}
@@ -565,7 +504,7 @@ namespace CitizenFX.Core
     {
         public TestScript()
         {
-            EventHandlers["getMapDirectives"] += new Action<dynamic>(add => 
+            EventHandlers["getMapDirectives"] += new Action<dynamic>(add =>
             {
                 Func<dynamic, string, Action<string>> addCB = (state, key) =>
                 {
