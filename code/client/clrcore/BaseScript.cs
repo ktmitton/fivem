@@ -290,7 +290,7 @@ namespace CitizenFX.Core
 		private static void TriggerLatentServerEventInternal(string eventName, byte[] argsSerialized, int bytesPerSecond)
 		{
 			var nativeHash = Hash.TRIGGER_LATENT_SERVER_EVENT_INTERNAL;
-				
+
 			unsafe
 			{
 				fixed (byte* serialized = &argsSerialized[0])
@@ -412,10 +412,10 @@ namespace CitizenFX.Core
 					var attributes = method.GetCustomAttributes<EventHandlerAttribute>();
 
 #if !IS_FXSERVER
-					Debug.WriteLine("Registering EventHandler {2} for attributed method {0}, with parameters {1}", method.Name, string.Join(", ", parameters.Select(p => p.GetType().ToString())), attribute.Name);
+					Debug.WriteLine("Registering EventHandler {2} for attributed method {0}, with parameters {1}", method.Name, string.Join(", ", parameters.Select(p => p.GetType().ToString())), string.Join(", ", attributes.Select(a => a.Name)));
 #endif
 
-					for (var attribute in attributes)
+					foreach (var attribute in attributes)
 					{
 						if (method.IsStatic)
 							this.RegisterEventHandler(attribute.Name, Delegate.CreateDelegate(actionType, method));
@@ -568,7 +568,7 @@ namespace CitizenFX.Core
     {
         public TestScript()
         {
-            EventHandlers["getMapDirectives"] += new Action<dynamic>(add => 
+            EventHandlers["getMapDirectives"] += new Action<dynamic>(add =>
             {
                 Func<dynamic, string, Action<string>> addCB = (state, key) =>
                 {
